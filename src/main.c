@@ -89,6 +89,7 @@ int main() {
 
         // 打印接收到的DNS查询报文
         for (int i = 0; i < recv_len; i++) {
+            // 格式控制: 以十六进制输出,2为指定的输出字段的宽度.如果位数小于2,则左端补0
             printf("%02x ", (unsigned char)buffer[i]);
             if ((i + 1) % 16 == 0) {
                 printf("\n");
