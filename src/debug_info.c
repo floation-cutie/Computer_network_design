@@ -1,4 +1,6 @@
 #include "debug_info.h"
+#include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 // 其中debug的信息需要进一步修饰，使其更加易读
@@ -53,11 +55,13 @@ void RR_info(DNS_RR *rr) {
     printf("RDLENGTH: %d ", rr->rdlength);
     // 根据不同的类型码输出不同的信息
     switch (rr->type) {
-    case TYPE_A:
+    case TYPE_A: {
         unsigned char IPv4[20];
+        memset(IPv4, 0, sizeof(IPv4));
         getIPv4(rr->rdata, IPv4);
-        printf("RDATA:%20s", IPv4);
+        printf("Address Resource Record:%20s", IPv4);
         break;
+    }
     case TYPE_NS:
     case TYPE_CNAME:
     case TYPE_PTR:
@@ -67,17 +71,18 @@ void RR_info(DNS_RR *rr) {
         printf("PREFERENCE: %d ", rr->rdata[0]);
         printf("EXCHANGE: %s\n", rr->rdata + 1);
         break;
-    case TYPE_AAAA:
+    case TYPE_AAAA: {
         unsigned char IPv6[40];
         getIPv6(rr->rdata, IPv6);
-        printf("RDATA: %s\n", IPv6);
+        printf("IPv6 Address Resource Record: %s\n", IPv6);
         break;
+    }
     case TYPE_SOA:
         printf("MNAME: %s ", rr->rdata);
         printf("RNAME: %s\n", rr->rdata + strlen(rr->rdata) + 1);
         break;
     case TYPE_TXT:
-        printf("RDATA: %s\n", rr->rdata);
+        printf("TXT RDATA: %s\n", rr->rdata);
         break;
     default:
         printf("RDATA: %s\n", rr->rdata);
@@ -91,7 +96,7 @@ void debug_RR(DNS_MSG *msg) {
         puts("------------------------ANSWER------------------------");
     for (int i = 0; i < msg->header->ancount; i++) {
         printf("RR %d\n", i + 1);
-        RRInfo(rr);
+        RR_info(rr);
         rr = rr->next;
     }
 
@@ -99,7 +104,7 @@ void debug_RR(DNS_MSG *msg) {
         puts("-----------------------AUTHORITY----------------------");
     for (int i = 0; i < msg->header->nscount; i++) {
         printf("RR %d\n", i + 1);
-        RRInfo(rr);
+        RR_info(rr);
         rr = rr->next;
     }
 
@@ -107,7 +112,7 @@ void debug_RR(DNS_MSG *msg) {
         puts("----------------------ADDITIONAL----------------------\n");
     for (int i = 0; i < msg->header->arcount; i++) {
         printf("RR %d\n", i + 1);
-        RRInfo(rr);
+        RR_info(rr);
         rr = rr->next;
     }
 
@@ -127,4 +132,10 @@ void debug_bytestream(unsigned char *bytestream) {
     }
     puts("");
     releaseMsg(msg);
+}
+
+void debug_dns_msg(DNS_MSG *msg) {
+    debug_header(msg);
+    debug_question(msg);
+    debug_RR(msg);
 }

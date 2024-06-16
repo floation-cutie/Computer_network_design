@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-
+#include <stdio.h>
 /*
     本头文件专门用于存放DNS报文结构体Message的定义，以及一切有关DNS报文的操作
     DNS 报文格式如下：

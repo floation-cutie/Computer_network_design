@@ -1,5 +1,5 @@
 #include "dns_msg.h"
-
+#include <stdlib.h>
 // 用于解析 DNS 报文中的域名字段
 void getName(unsigned char *qname, const unsigned char *bytestream,
              unsigned short *offset) {
@@ -11,7 +11,7 @@ void getName(unsigned char *qname, const unsigned char *bytestream,
         if (((*(bytestream + *offset) >> 6) & 3) == 3) { // 检测压缩标签（前两位为11）
             unsigned short new_offset =
                 ntohs(*(unsigned short *)(bytestream + *offset)) & 0x3fff; // 获取新的偏移量
-            printf("Compressed label detected. Jumping to offset: %u\n", new_offset);
+            // printf("Compressed label detected. Jumping to offset: %u\n", new_offset);
             getName(qname, bytestream, &new_offset); // 递归解析压缩标签指向的部分
             (*offset) += 2;                          // 跳过压缩标签的两个字节
             return;
@@ -46,18 +46,18 @@ void getDomain(unsigned char *original, unsigned char *domain) {
     while (*(original + offset) != 0) {
         if (*(original + offset) <= 0x40) {
             count = *(original + offset); // 获取下一个标签的长度
-            printf("Label length: %u\n", count);
+            // printf("Label length: %u\n", count);
             (offset)++;
         }
         for (int i = 0; i < count; i++) {
             *domain = *(original + offset); // 复制标签到qname
-            printf("Copying byte: %c\n", *domain);
+                                            // printf("Copying byte: %c\n", *domain);
             domain++;
             (offset)++;
         }
         if (*(original + offset) != 0) {
             *domain = '.'; // 添加标签分隔符
-            printf("Adding label separator\n");
+            // printf("Adding label separator\n");
             domain++;
         }
     }
@@ -244,7 +244,7 @@ void putRR(const DNS_RR *rr, unsigned char *bytestream, unsigned short *offset) 
     (*offset) += rr->rdlength;
 }
 
-// dns报文结构体转换为字节流
+// dns报文结构体转换为字节流,进行DNS报文的发送
 unsigned char *dnsmsg_to_bytestream(const DNS_MSG *msg) {
     unsigned char *bytestream = (unsigned char *)malloc(sizeof(unsigned char) * UDP_MAX);
     if (!bytestream) {

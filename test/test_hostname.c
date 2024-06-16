@@ -44,7 +44,7 @@ int main() {
         'h', 't', 't', 'p', 0xc0, 0x00 // 压缩标签，指向偏移量0x00处的"www.example.com"
     };
     unsigned char qname[256];
-    unsigned short offset = 0x10; // 这里假设偏移量0x10是压缩标签的开始位置
+    unsigned short offset = 0x11; // 这里假设偏移量0x11是压缩标签的开始位置
 
     getName(qname, bytestream, &offset);
     printf("Parsed name: %s\n", qname); // 输出"www.example.com"

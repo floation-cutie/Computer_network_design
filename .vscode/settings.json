@@ -1,5 +1,9 @@
 {
     "files.associations": {
-        "xutility": "c"
+        "xutility": "c",
+        "dns_relay_server.h": "c",
+        "socket.h": "c",
+        "debug_info.h": "c",
+        "dns_msg.h": "c"
     }
 }
