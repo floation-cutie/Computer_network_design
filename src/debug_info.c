@@ -139,3 +139,25 @@ void debug_dns_msg(DNS_MSG *msg) {
     debug_question(msg);
     debug_RR(msg);
 }
+
+void debug_cache(struct Cache *cache) {
+    puts("------------------------CACHE------------------------");
+    time_t now = time(NULL);
+    for (int i = 0; i < CACHE_SIZE; i++) {
+        printf("Bucket %d\n", i);
+        struct CacheEntry *entry = cache->table[i];
+        if (entry) {
+            printf("Domain: %s\n", entry->domain);
+            if (entry->expireTime < now) {
+                printf("Expired\n");
+            } else {
+                struct tm *local_time = localtime(&now);
+                char time_str[20]; // YYYY-MM-DD HH:MM:SS\0
+                strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", local_time);
+                printf("Expire time: %s\n", time_str);
+            }
+            puts("");
+        }
+    }
+    puts("----------------------------------------------------");
+}
