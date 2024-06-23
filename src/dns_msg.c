@@ -291,3 +291,51 @@ void releaseMsg(DNS_MSG *msg) {
     }
     free(msg);
 }
+
+// 添加answer字段
+void addAnswer(DNS_MSG *msg, const unsigned char *IP, unsigned int _ttl, unsigned short _type) {
+    // 不良网站拦截的报文设置
+    if (_type == TYPE_A && *(unsigned int *)(IP) == 0) {
+        msg->header->rcode = HEADER_RCODE_NAME_ERROR;
+    }
+
+    // 设置header字段的值
+    msg->header->qr = HEADER_QR_ANSWER;
+    msg->header->rd = 1;
+    msg->header->ra = 1;
+    msg->header->ancount++;
+
+    // 为answer字段添加一个Resource Record
+    DNS_RR *rr = msg->RRs;
+    DNS_RR *prev = NULL;
+    while (rr) {
+        prev = rr;
+        rr = rr->next;
+    }
+    if (prev) {
+        rr = (DNS_RR *)malloc(sizeof(DNS_RR));
+        if (!rr) {
+            puts("动态分配内存失败");
+            exit(1);
+        }
+        prev->next = rr;
+        rr->next = NULL;
+    } else {
+        msg->RRs = (DNS_RR *)malloc(sizeof(DNS_RR));
+        msg->RRs->next = NULL;
+        rr = msg->RRs;
+    }
+    rr->name = (unsigned char *)malloc(sizeof(unsigned char) * UDP_MAX);
+    // 从question中复制域名,不使用压缩标签
+    memcpy(rr->name, msg->question->qname, strlen((char *)(msg->question->qname)) + 1);
+    rr->type = _type;
+    rr->_class = CLASS_IN;
+    rr->ttl = _ttl;
+    if (_type == TYPE_A) {
+        rr->rdlength = 4; // IPv4
+    } else {
+        rr->rdlength = 16; // IPv6
+    }
+    rr->rdata = (unsigned char *)malloc(sizeof(unsigned char) * rr->rdlength);
+    memcpy(rr->rdata, IP, rr->rdlength);
+}

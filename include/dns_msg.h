@@ -132,3 +132,6 @@ unsigned char *dnsmsg_to_bytestream(const DNS_MSG *msg);
 
 // 释放dns报文结构体
 void releaseMsg(DNS_MSG *msg);
+
+// 生成DNS报文回复
+void addAnswer(DNS_MSG *msg, const unsigned char *IP, unsigned int _ttl, unsigned short _type);

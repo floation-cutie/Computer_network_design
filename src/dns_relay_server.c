@@ -36,7 +36,7 @@ void forward_dns_response(RAII_Socket sock, unsigned char *buf, int len, address
     }
 }
 
-unsigned char *find_ip_in_cache(const unsigned char *domain) {
+unsigned char *find_ip_in_cache(const unsigned char *domain, int *ip_type) {
     unsigned char ipAddr[16];
     unsigned char *ipAddress = NULL;
     // 先在缓存表中查找,找到返回
@@ -46,6 +46,7 @@ unsigned char *find_ip_in_cache(const unsigned char *domain) {
                 IPv4 address: %d.%d.%d.%d\n",
                domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
         ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 4);
+        *ip_type = TYPE_A;
         memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 4);
     } else if (findEntry(cache, domain, ipAddr, TYPE_AAAA)) {
         // 16字节地址
@@ -57,6 +58,7 @@ unsigned char *find_ip_in_cache(const unsigned char *domain) {
                ipAddr[7], ipAddr[8], ipAddr[9], ipAddr[10],
                ipAddr[11], ipAddr[12], ipAddr[13], ipAddr[14], ipAddr[15]);
         ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 16);
+        *ip_type = TYPE_AAAA;
         memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 16);
     } else {
         // 如果在本地表中找到了记录,将其添加到缓存表中
@@ -69,6 +71,7 @@ unsigned char *find_ip_in_cache(const unsigned char *domain) {
                     IPv4 address: %d.%d.%d.%d\n",
                    domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
             ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 4);
+            *ip_type = TYPE_A;
             memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 4);
         } else {
             printf("Can't find the domain (%s) in cache table or local dictionary tree\n", domain);
@@ -78,42 +81,23 @@ unsigned char *find_ip_in_cache(const unsigned char *domain) {
     return ipAddress;
 }
 
+// 向用户端发送DNS响应报文
 void send_dns_response(RAII_Socket sock, DNS_MSG *msg, address_t clientAddr) {
-    unsigned char *ipAddress = NULL;
-    unsigned char domain[256];
-    getDomain(msg->question->qname, domain);
-    ipAddress = find_ip_in_cache(domain);
-    if (ipAddress == NULL) {
-        return;
+    unsigned char *bytestream = dnsmsg_to_bytestream(msg);
+    int len;
+    // 计算bytestream的长度: 原因是动态分配的内存无直接计算长度的方法
+    DNS_MSG *temp = bytestream_to_dnsmsg(bytestream, (unsigned short *)(&len));
+    if (debug_mode) {
+        puts("------- SENDING DNS response --------");
     }
-    // 构造DNS响应消息
-    unsigned char buf[1024];
-    unsigned short offset = 0;
-    dnsmsg_to_bytestream(msg, buf, &offset);
-    // 修改DNS消息头部
-    msg->header->qr = HEADER_QR_ANSWER;
-    msg->header->ra = 1;
-    msg->header->rd = 1;
-    msg->header->rcode = 0;
-    msg->header->ancount = htons(1);
-    msg->header->nscount = 0;
-    msg->header->arcount = 0;
-    // 修改DNS消息问题部分
-    msg->question->qclass = htons(1);
-    msg->question->qtype = htons(1);
-    // 修改DNS消息回答部分
-    msg->answer->name = htons(0xc00c);
-    msg->answer->type = htons(1);
-    msg->answer->class = htons(1);
-    msg->answer->ttl = htonl(CACHE_TTL);
-    msg->answer->rdlength = htons(4);
-    memcpy(msg->answer->rdata, ipAddress, 4);
-    // 将DNS消息转换为字节流
-    offset = 0;
-    dnsmsg_to_bytestream(msg, buf, &offset);
-    // 转发DNS响应
-    forward_dns_response(sock, buf, offset, clientAddr);
-    free(ipAddress);
+    if (socket_send(sock, &clientAddr, bytestream, len) != 0) {
+        return;
+    } else {
+        printf("SEND DNS response to client successfully\n");
+        puts("---------------------");
+    }
+    releaseMsg(temp);
+    free(bytestream);
 }
 
 /**
@@ -131,12 +115,29 @@ void handle_client_request(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg,
     // 将DNS消息中的域名转换为缓存对应格式
     unsigned char domain[256];
     getDomain(msg->question->qname, domain);
-    if ((ipAddress = find_ip_in_cache(domain)) != NULL) {
-        // 从缓存表中找到了记录
+    printf("Received DNS request from client, domain: %s\n", domain);
+    int ip_type = -1;
+    if ((ipAddress = find_ip_in_cache(domain, &ip_type)) != NULL && (ip_type == msg->question->qtype)) {
+        // 如果缓存内容与查询要求版本一致
+        // 直接对DNS请求进行扩充
+        puts("Find the domain in cache table, directly send the response to client");
+        addAnswer(msg, ipAddress, ip_type, CACHE_TTL);
         send_dns_response(sock, msg, clientAddr);
         return;
+    } else {
+        // 如果缓存内容与查询要求版本不一致
+        // 构造ID映射,转发请求到远程DNS服务器
+        unsigned short original_id = msg->header->id;
+        unsigned short relay_id = generate_unique_id();
+        // 将ID映射关系添加到映射表中
+        add_id_mapping(original_id, relay_id, clientAddr);
+        // 修改DNS消息头部
+        msg->header->id = htons(relay_id);
+        // 将DNS消息转换为字节流
+        unsigned char buf[1024];
+        unsigned short offset = 0;
+        dnsmsg_to_bytestream(msg, buf, &offset);
+        // 转发DNS请求
+        forward_dns_request(sock, buf, offset);
     }
-    // 构造ID映射,转发请求到远程DNS服务器
-    unsigned short original_id = msg->header->id;
-    unsigned short relay_id = generate_unique_id();
 }

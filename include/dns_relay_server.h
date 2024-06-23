@@ -18,6 +18,6 @@ uint8_t buffer[BUFFER_SIZE]; // 用于DNS消息的缓冲区
 void handle_client_request(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len);
 void handle_server_response(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len);
 void send_dns_response(RAII_Socket sock, DNS_MSG *msg, address_t clientAddr);
-unsigned char *find_ip_in_cache(const unsigned char *domain);
+unsigned char *find_ip_in_cache(const unsigned char *domain, int *IP_type);
 void forward_dns_request(RAII_Socket sock, unsigned char *buf, int len);
 void forward_dns_response(RAII_Socket sock, unsigned char *buf, int len, address_t clientAddr);
