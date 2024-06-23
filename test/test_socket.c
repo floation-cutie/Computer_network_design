@@ -64,6 +64,10 @@ int main() {
         printf("Received DNS request from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         // 这里可以处理接收到的 DNS 请求并发送响应
+        // 示例：发送一个简单的响应（假设响应长度为 recv_len）
+        if (sendto(rs.sockfd, buf, recv_len, 0, (struct sockaddr *)&client_addr, client_addr_len) == SOCKET_ERROR) {
+            printf("sendto() failed. Error Code: %d\n", WSAGetLastError());
+        }
     }
 
     cleanup_socket(&rs);

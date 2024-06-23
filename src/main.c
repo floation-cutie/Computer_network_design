@@ -1,10 +1,17 @@
-#include "debug_info.h"
+#include "config.h"
 #include "dns_relay_server.h"
-#include "id_convert.h"
 
-int main() {
+int main(int argc, char *argv[]) {
+    // 创建字典树和缓存表
+    struct Trie *trie = (struct Trie *)malloc(sizeof(struct Trie));
+
+    struct Cache *cache = (struct Cache *)malloc(sizeof(struct Cache));
+    host_path = "./dnsrelay.txt";
     remote_dns = "10.3.9.5";
-    initialize_winsock();
+    debug_mode = 0;
+    log_mode = 0;
+    init(argc, argv, cache, trie);
+
     server_sock = create_socket();
     while (1) {
         receive_from_client();

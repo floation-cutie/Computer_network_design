@@ -11,7 +11,6 @@ RAII_Socket server_sock; // 客户端socket
 address_t client_addr;
 socklen_t addr_len;
 uint8_t buffer[BUFFER_SIZE]; // 用于DNS消息的缓冲区
-char *remote_dns;            // 远程主机（BUPT的DNS服务器）
 
 // typedef struct {
 //     int sock;

@@ -1,5 +1,5 @@
 #include "dns_relay_server.h"
-
+#include "config.h"
 void forward_dns_request(RAII_Socket sock, unsigned char *buf, int len) {
 
     int offset = 0;

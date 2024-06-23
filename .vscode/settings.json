@@ -5,6 +5,13 @@
         "socket.h": "c",
         "debug_info.h": "c",
         "dns_msg.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "string.h": "c",
+        "get_opt.h": "c",
+        "stdio.h": "c",
+        "config.h": "c",
+        "getopt.h": "c",
+        "id_convert.h": "c",
+        "pthread.h": "c"
     }
 }
