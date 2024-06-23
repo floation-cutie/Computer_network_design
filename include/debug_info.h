@@ -17,3 +17,5 @@ void debug_dns_msg(DNS_MSG *msg);
 void debug_bytestream(unsigned char *bytestream);
 
 void debug_cache(struct Cache *cache);
+
+void debug_dns_msg_by_bytestream(unsigned char *bytestream);

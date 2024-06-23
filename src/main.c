@@ -13,8 +13,18 @@ int main(int argc, char *argv[]) {
     init(argc, argv, cache, trie);
 
     server_sock = create_socket();
+
     while (1) {
         receive_from_client();
         receive_from_server();
     }
+
+    cleanup_id_mapping();
+    clearCache(cache);
+    free(cache);
+    cleanup_socket(&server_sock);
+
+    free(trie);
+
+    return 0;
 }

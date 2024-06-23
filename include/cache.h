@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dns_msg.h"
 #include "hash.h"
 #include <time.h>
 

@@ -59,9 +59,9 @@ int findEntry(struct Cache *cache, const unsigned char *domain, unsigned char *i
                 cache->head = entry;
 
                 // 设置 IP 地址
-                if (ipVersion == 1)
+                if (ipVersion == TYPE_A)
                     memcpy(ipAddr, entry->ipAddr.ipAddr4, sizeof(entry->ipAddr.ipAddr4));
-                else
+                else if (ipVersion == TYPE_AAAA)
                     memcpy(ipAddr, entry->ipAddr.ipAddr6, sizeof(entry->ipAddr.ipAddr6));
 
                 return 1; // 返回成功
@@ -110,9 +110,9 @@ void addEntry(struct Cache *cache, const unsigned char *domain, const unsigned c
     entry->domain[domainLen] = '\0';
 
     // 复制IP地址
-    if (ipVersion == 1)
+    if (ipVersion == TYPE_A)
         memcpy(entry->ipAddr.ipAddr4, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr4));
-    else
+    else if (ipVersion == TYPE_AAAA)
         memcpy(entry->ipAddr.ipAddr6, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr6));
 
     // 设置过期时间

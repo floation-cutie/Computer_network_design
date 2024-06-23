@@ -134,6 +134,13 @@ void debug_bytestream(unsigned char *bytestream) {
     releaseMsg(msg);
 }
 
+void debug_dns_msg_by_bytestream(unsigned char *bytestream) {
+    unsigned short offset = 0;
+    DNS_MSG *msg = bytestream_to_dnsmsg(bytestream, &offset);
+    debug_dns_msg(msg);
+    releaseMsg(msg);
+}
+
 void debug_dns_msg(DNS_MSG *msg) {
     debug_header(msg);
     debug_question(msg);
