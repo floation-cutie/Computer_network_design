@@ -1,5 +1,7 @@
 #include "debug_info.h"
 #include "dns_relay_server.h"
+#include "id_convert.h"
+
 int main() {
     remote_dns = "10.3.9.5";
     initialize_winsock();
