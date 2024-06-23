@@ -36,10 +36,9 @@ void forward_dns_response(RAII_Socket sock, unsigned char *buf, int len, address
     }
 }
 
-unsigned char *find_ip_in_cache(struct Trie *trie, struct Cache *cache, const unsigned char *domain) {
+unsigned char *find_ip_in_cache(const unsigned char *domain) {
     unsigned char ipAddr[16];
     unsigned char *ipAddress = NULL;
-
     // 先在缓存表中查找,找到返回
     if (findEntry(cache, domain, ipAddr, TYPE_A)) {
         printf("Search successfully in cache table!\n,\
@@ -48,9 +47,15 @@ unsigned char *find_ip_in_cache(struct Trie *trie, struct Cache *cache, const un
                domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
         ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 4);
         memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 4);
-        ipAddress[4] = '\0';
     } else if (findEntry(cache, domain, ipAddr, TYPE_AAAA)) {
-        printf("在缓存表查找成功,域名为%s,IPv6地址为%d.%d.%d.%d.%d.%d.%d.%d\n", domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3], ipAddr[4], ipAddr[5], ipAddr[6], ipAddr[7]);
+        // 16字节地址
+        printf("Search successfully in cache table!\n,\
+                domain: %s,\
+                IPv6 address:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
+               domain, ipAddr[0], ipAddr[1], ipAddr[2],
+               ipAddr[3], ipAddr[4], ipAddr[5], ipAddr[6],
+               ipAddr[7], ipAddr[8], ipAddr[9], ipAddr[10],
+               ipAddr[11], ipAddr[12], ipAddr[13], ipAddr[14], ipAddr[15]);
         ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 16);
         memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 16);
     } else {
@@ -59,60 +64,79 @@ unsigned char *find_ip_in_cache(struct Trie *trie, struct Cache *cache, const un
         if (node != 0) {
             memcpy(ipAddr, trie->toIp[node], sizeof(ipAddr));
             addEntry(cache, domain, ipAddr, 1, CACHE_TTL);
-            printf("在本地字典树查找成功,域名为%s,IP地址为%d.%d.%d.%d\n", domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
-            ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 5);
-            memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 5);
-            ipAddress[4] = '\0';
-        } else // 本地表和缓存表都没有找到,需要转发到远程DNS服务器
-        {
-            printf("本地表和缓存表都未查找到域名%s,需要访问远程DNS服务器\n", domain);
+            printf("Search successfully in local dictionary tree!\n,\
+                    domain: %s,\
+                    IPv4 address: %d.%d.%d.%d\n",
+                   domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
+            ipAddress = (unsigned char *)malloc(sizeof(unsigned char) * 4);
+            memcpy(ipAddress, ipAddr, sizeof(unsigned char) * 4);
+        } else {
+            printf("Can't find the domain (%s) in cache table or local dictionary tree\n", domain);
             return NULL;
         }
     }
     return ipAddress;
 }
 
-void receive_from_client() {
-    int nbytes = -1;
-    memset(buffer, 0, sizeof(buffer));
-    if (socket_recv(server_sock, &client_addr, buffer, sizeof(buffer), &nbytes) != 0) {
+void send_dns_response(RAII_Socket sock, DNS_MSG *msg, address_t clientAddr) {
+    unsigned char *ipAddress = NULL;
+    unsigned char domain[256];
+    getDomain(msg->question->qname, domain);
+    ipAddress = find_ip_in_cache(domain);
+    if (ipAddress == NULL) {
         return;
     }
-    printf("Received %d bytes from client\n", nbytes);
+    // 构造DNS响应消息
+    unsigned char buf[1024];
     unsigned short offset = 0;
-    // 解析DNS消息
-    DNS_MSG *msg = bytestream_to_dnsmsg(buffer, &offset);
-    if (msg == NULL) {
-        printf("Failed to parse DNS message\n");
-        return;
-    }
-    debug_time();
-    debug_dns_msg(msg);
-    // 转发DNS请求
-    if (msg->header->qr == HEADER_QR_QUERY) {
-        forward_dns_request(server_sock, buffer, nbytes);
-    }
+    dnsmsg_to_bytestream(msg, buf, &offset);
+    // 修改DNS消息头部
+    msg->header->qr = HEADER_QR_ANSWER;
+    msg->header->ra = 1;
+    msg->header->rd = 1;
+    msg->header->rcode = 0;
+    msg->header->ancount = htons(1);
+    msg->header->nscount = 0;
+    msg->header->arcount = 0;
+    // 修改DNS消息问题部分
+    msg->question->qclass = htons(1);
+    msg->question->qtype = htons(1);
+    // 修改DNS消息回答部分
+    msg->answer->name = htons(0xc00c);
+    msg->answer->type = htons(1);
+    msg->answer->class = htons(1);
+    msg->answer->ttl = htonl(CACHE_TTL);
+    msg->answer->rdlength = htons(4);
+    memcpy(msg->answer->rdata, ipAddress, 4);
+    // 将DNS消息转换为字节流
+    offset = 0;
+    dnsmsg_to_bytestream(msg, buf, &offset);
+    // 转发DNS响应
+    forward_dns_response(sock, buf, offset, clientAddr);
+    free(ipAddress);
 }
 
-void receive_from_server() {
-    int nbytes = -1;
-    memset(buffer, 0, sizeof(buffer));
-    address_t remote_addr;
-    if (socket_recv(server_sock, &remote_addr, buffer, sizeof(buffer), &nbytes) != 0) {
+/**
+ * @brief
+ * 首先查找本地是否有缓存，如果有则直接返回，
+ * 否则构造ID映射表，转发请求到远程DNS服务器
+ * @param sock 服务器socket
+ * @param clientAddr 客户端地址
+ * @param msg DNS消息
+ * @param len 消息长度
+ * @return void
+ */
+void handle_client_request(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len) {
+    unsigned char *ipAddress = NULL;
+    // 将DNS消息中的域名转换为缓存对应格式
+    unsigned char domain[256];
+    getDomain(msg->question->qname, domain);
+    if ((ipAddress = find_ip_in_cache(domain)) != NULL) {
+        // 从缓存表中找到了记录
+        send_dns_response(sock, msg, clientAddr);
         return;
     }
-    printf("Received %d bytes from server\n", nbytes);
-    unsigned short offset = 0;
-    // 解析DNS消息
-    DNS_MSG *msg = bytestream_to_dnsmsg(buffer, &offset);
-    if (msg == NULL) {
-        printf("Failed to parse DNS message\n");
-        return;
-    }
-    debug_time();
-    debug_dns_msg(msg);
-    // 转发DNS响应
-    if (msg->header->qr == HEADER_QR_ANSWER && remote_addr.sin_addr.s_addr == inet_addr(remote_dns)) {
-        forward_dns_response(server_sock, buffer, nbytes, client_addr);
-    }
+    // 构造ID映射,转发请求到远程DNS服务器
+    unsigned short original_id = msg->header->id;
+    unsigned short relay_id = generate_unique_id();
 }

@@ -11,9 +11,8 @@ void getName(unsigned char *qname, const unsigned char *bytestream,
         if (((*(bytestream + *offset) >> 6) & 3) == 3) { // 检测压缩标签（前两位为11）
             unsigned short new_offset =
                 ntohs(*(unsigned short *)(bytestream + *offset)) & 0x3fff; // 获取新的偏移量
-            // printf("Compressed label detected. Jumping to offset: %u\n", new_offset);
-            getName(qname, bytestream, &new_offset); // 递归解析压缩标签指向的部分
-            (*offset) += 2;                          // 跳过压缩标签的两个字节
+            getName(qname, bytestream, &new_offset);                       // 递归解析压缩标签指向的部分
+            (*offset) += 2;                                                // 跳过压缩标签的两个字节
             return;
         }
         *qname = *(bytestream + *offset);
@@ -22,8 +21,6 @@ void getName(unsigned char *qname, const unsigned char *bytestream,
     }
     (*offset)++;
     *qname = '\0'; // 终止字符串
-    printf("Finished parsing name. Final offset: %u, Initial offset: %u\n",
-           *offset, initial_offset);
 }
 
 // 获得点分十进制形式的IPv4地址 4字节
@@ -33,7 +30,7 @@ void getIPv4(unsigned char *original, unsigned char *IPv4) {
             ntohs(*(unsigned short *)(original + 3)));
 }
 
-// 获得冒分十六进制形式的IPv6地址 12字节
+// 获得冒分十六进制形式的IPv6地址 16字节
 void getIPv6(unsigned char *original, unsigned char *IPv6) {
     sprintf((char *)(IPv6), "%x:%x:%x:%x:%x:%x:%x:%x", ntohs(*(unsigned short *)(original)), ntohs(*(unsigned short *)(original + 2)),
             ntohs(*(unsigned short *)(original + 4)), ntohs(*(unsigned short *)(original + 6)), ntohs(*(unsigned short *)(original + 8)),
@@ -46,24 +43,20 @@ void getDomain(unsigned char *original, unsigned char *domain) {
     while (*(original + offset) != 0) {
         if (*(original + offset) <= 0x40) {
             count = *(original + offset); // 获取下一个标签的长度
-            // printf("Label length: %u\n", count);
             (offset)++;
         }
         for (int i = 0; i < count; i++) {
             *domain = *(original + offset); // 复制标签到qname
-                                            // printf("Copying byte: %c\n", *domain);
             domain++;
             (offset)++;
         }
         if (*(original + offset) != 0) {
             *domain = '.'; // 添加标签分隔符
-            // printf("Adding label separator\n");
             domain++;
         }
     }
 }
 
-//
 void getHeader(DNS_Header *header, const unsigned char *bytestream) {
     header->id = ntohs(*(unsigned short *)bytestream);
     header->qr = (bytestream[2] >> 7) & 1;

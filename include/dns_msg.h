@@ -26,7 +26,7 @@
 
 // OPCODE字段的值定义
 #define HEADER_OPCODE_QUERY 0
-#define HEADER_OPCODE_IQUERY 1
+#define HEADER_OPCODE_IQUERY 1 // 逆向查询 由IP地址找域名
 #define HEADER_OPCODE_STATUS 2
 
 // RCODE字段的值定义

@@ -2,6 +2,11 @@
 
 #include "cache.h"
 #include "dns_msg.h"
+
+// 统计信息(后续)
+static uint64_t query_count, cache_hit_count, cache_outdate_count;
+static uint64_t remote_send_count, remote_recv_count;
+
 void debug_header(DNS_MSG *msg);
 
 void debug_question(DNS_MSG *msg);
