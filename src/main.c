@@ -1,86 +1,114 @@
 #include "config.h"
 #include "dns_relay_server.h"
+#include "thread_pool.h"
+#include <process.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <winsock2.h>
 
-void signal_handler(int signal) {
-    fprintf(stderr, "Received signal %d\n", signal);
-    exit(EXIT_FAILURE);
-}
+#define DEFAULT_PORT 53          // DNS服务器默认端口号
+#define MAX_DNS_PACKET_SIZE 1024 // DNS请求报文最大长度
+CRITICAL_SECTION threadPoolCS;   // 线程池临界区
+HANDLE semaphore;                // 信号量，用于线程池和等待队列之间的同步
 
 int main(int argc, char *argv[]) {
-    // 创建字典树和缓存表
-    trie = (struct Trie *)malloc(sizeof(struct Trie));
-    cache = (struct Cache *)malloc(sizeof(struct Cache));
-    host_path = "../src/dnsrelay.txt";
-    remote_dns = "10.3.9.5";
+    // 默认监听端口号
+    int port = DEFAULT_PORT;
+    host_path = "../src/dnsrelay.txt"; // 静态缓存文件
+    log_path = "../bin/log.txt";
+    remote_dns = "144.144.144.144";
     debug_mode = 0;
     log_mode = 0;
+    // 创建字典树和缓存表
+    struct Trie *trie = (struct Trie *)malloc(sizeof(struct Trie));
+
+    struct Cache *cache = (struct Cache *)malloc(sizeof(struct Cache));
     init(argc, argv, cache, trie);
-    signal(SIGSEGV, signal_handler);
-    signal(SIGABRT, signal_handler);
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
-    server_sock = create_socket();
 
-    int loop = 0;
-    // 从单客户端 --> 多客户端
-    for (;;) {
-        printf("----------------------\nStarting loop %d\n--------------------\n", loop);
-        int nbytes = -1;
-        memset(buffer, 0, sizeof(buffer));
-        address_t sender_addr;
-        if (socket_recv(server_sock, &sender_addr, buffer, sizeof(buffer), &nbytes) != 0) {
-            printf("Have some problem");
-            exit(EXIT_FAILURE);
-        }
-        if (nbytes == -1) continue;
-        printf("received from %s\n", inet_ntoa(sender_addr.sin_addr));
-        if (debug_mode)
-            printf("Received %d bytes from sender\n Send from %d port\n", nbytes, ntohs(sender_addr.sin_port));
-        unsigned short offset = 0;
-        // 解析DNS消息
-        DNS_MSG *msg = bytestream_to_dnsmsg(buffer, &offset);
-        if (msg == NULL) {
-            printf("Failed to parse DNS message\n");
-            exit(EXIT_FAILURE);
-        }
-        if (msg->header->qr == HEADER_QR_QUERY && msg->header->opcode == HEADER_OPCODE_QUERY) {
-            // 如果请求是标准查询请求,且个数为1,则直接处理
-            if (msg->header->qdcount != 1)
-                printf("Unsupported: query qdcount is %d instead of 1, discarded\n", msg->header->qdcount);
-            else {
-                handle_client_request(server_sock, sender_addr, msg, nbytes);
-            }
+    // 初始化线程池和等待队列
+    struct ThreadPool threadPool;
+    init_thread_pool(&threadPool);
 
-        } else if (msg->header->qr == HEADER_QR_ANSWER && sender_addr.sin_addr.s_addr == inet_addr(remote_dns)) {
-            address_t client_addr;
-            handle_server_response(server_sock, client_addr, msg, sizeof(buffer));
-        } else if (msg->header->qr == HEADER_QR_QUERY) {
-            // 构造ID映射,直接转发请求到远程DNS服务器
-            unsigned short original_id = msg->header->id;
-            unsigned short relay_id = generate_unique_id();
-            // 将ID映射关系添加到映射表中
-            store_id_mapping(original_id, relay_id, sender_addr, sizeof(sender_addr));
-            // 修改DNS消息头部
-            msg->header->id = relay_id;
-            // 将DNS消息转换为字节流
-            unsigned char *buf = dnsmsg_to_bytestream(msg);
-            printf("The id mapping is %d -> %d, client address is %s\n", original_id, relay_id, inet_ntoa(sender_addr.sin_addr));
-            // 转发DNS请求
-            forward_dns_request(server_sock, buf, nbytes);
-            free(buf);
-        }
-        releaseMsg(msg);
-        loop++;
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        printf("Init Windows Socket Failed\n");
+        return 1;
     }
 
-    printf("Server is shutting down\n");
+    // 创建socket
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET) {
+        printf("Create socket failed\n");
+        return 1;
+    }
 
-    cleanup_id_mapping();
+    struct sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(port);
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        printf("Bind socket %d failed\n", port);
+        closesocket(sock);
+        return 1;
+    }
+
+    printf("The DNS relay server is running on port %d...\n", port);
+
+    while (true) {
+        // 接收DNS请求
+        char buf[MAX_DNS_PACKET_SIZE];
+        struct sockaddr_in clientAddr;
+        int clientAddrLen = sizeof(clientAddr);
+        int recvLen = recvfrom(sock, buf, MAX_DNS_PACKET_SIZE, 0, (struct sockaddr *)&clientAddr, &clientAddrLen);
+        if (recvLen == SOCKET_ERROR) {
+            printf("Receive DNS request failed\n");
+            continue;
+        }
+
+        printf("Receving message from %s:%d,the length is %d bytes.\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), recvLen);
+
+        // 从线程池中取出一个线程，如果线程池已满，则将请求放入等待队列中
+        WaitForSingleObject(semaphore, INFINITE);
+        EnterCriticalSection(&threadPoolCS);
+        struct ThreadParam *param = NULL;
+        if (threadPool.count > 0) {
+            param = threadPool.params[--threadPool.count];
+        }
+        LeaveCriticalSection(&threadPoolCS);
+
+        if (param->trie == NULL) {
+            // 如果线程池中有空闲线程，则将请求分配给该线程处理
+            param->trie = trie;
+            param->cache = cache;
+            param->sock = sock;
+            param->clientAddr = clientAddr;
+            param->clientAddrLen = clientAddrLen;
+            _beginthreadex(NULL, 0, threadProc, param, 0, NULL);
+        } else {
+            // 如果线程池已满，则将请求放入等待队列中
+            param = (struct ThreadParam *)malloc(sizeof(struct ThreadParam));
+            param->trie = trie;
+            param->cache = cache;
+            param->sock = sock;
+            param->clientAddr = clientAddr;
+            param->clientAddrLen = clientAddrLen;
+
+            EnterCriticalSection(&threadPoolCS);
+            add_to_pool(&threadPool, param);
+            LeaveCriticalSection(&threadPoolCS);
+        }
+    }
+
+    // 关闭socket和清理资源
+    closesocket(sock);
+    free(trie);
     clearCache(cache);
     free(cache);
-    cleanup_socket(&server_sock);
-    // trie树的内存静态分配
-    free(trie);
+    // 销毁线程池和等待队列
+    destroy_thread_pool(&threadPool);
+    WSACleanup();
 
     return 0;
 }

@@ -119,10 +119,6 @@
 0.0.0.0 www.cnqb.net
 0.0.0.0 www.coolcdrom.com
 0.0.0.0 zhendeshi.tiebiechang-tiebiechangde.zuichang255zifu.domain-name.com
-0.0.0.0 updates.optionsplus.logitechg.comhttp
-0.0.0.0 mobile.events.data.microsoft.com
-0.0.0.0 osfsr.lenovomm.com
-0.0.0.0 kflow-idle.wpscdn.cn
 0.0.0.0 www.coolseach.com
 0.0.0.0 www.dhchao.com
 0.0.0.0 www.dj3344.com
@@ -203,6 +199,10 @@
 0.0.0.0 zbszx.vicp.net
 0.0.0.0 zelnet.ru
 0.0.0.0 test0
-10.3.9.161 www.bupt.edu.cn
+11.111.11.111 test1
+22.22.222.222 test2
+202.108.33.89 sina 
+61.135.181.175 sohu
+1.1.1.1 www.bupt.edu.cn
 0.0.0.0 ad4.sina.com.cn
 0.0.0.0 www.163daohang.com.cn

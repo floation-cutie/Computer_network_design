@@ -1,170 +1,111 @@
-#include "debug_info.h"
+#include "..\include\debug_info.h"
+#include "..\include\msg_convert.h"
 #include <stdio.h>
-#include <string.h>
 #include <time.h>
 
-// 其中debug的信息需要进一步修饰，使其更加易读
-
-void debug_time() {
-    // 根据时钟周期计算时间
-    static clock_t start = 0;
-    if (start == 0) {
-        start = clock();
+// 打印程序执行时间
+void printTime() {
+    static clock_t start_time = 0;
+    if (start_time == 0) {
+        start_time = clock();
     }
-    clock_t end = clock();
-    printf("Time: %.3f\n", (double)(end - start) / CLOCKS_PER_SEC);
+    clock_t end_time = clock();
+    double elapsed_time = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+    printf("%.3f:\n", elapsed_time);
 }
 
-void debug_header(DNS_MSG *msg) {
-    puts("------------------------HEADER--------------------------------");
-    printf("ID: %d ", msg->header->id);
-    printf("QR: %d ", msg->header->qr);
-    printf("Opcode: %d ", msg->header->opcode);
-    printf("AA: %d ", msg->header->aa);
-    printf("TC: %d ", msg->header->tc);
-    printf("RD: %d ", msg->header->rd);
-    printf("RA: %d ", msg->header->ra);
-    printf("Z: %d ", msg->header->z);
-    printf("RCODE: %d ", msg->header->rcode);
-    printf("QDCOUNT: %d ", msg->header->qdcount);
-    printf("ANCOUNT: %d ", msg->header->ancount);
-    printf("NSCOUNT: %d ", msg->header->nscount);
-    printf("ARCOUNT: %d\n", msg->header->arcount);
-}
-
-void debug_question(DNS_MSG *msg) {
-    puts("------------------------QUESTION------------------------");
-    DNS_Question *q = msg->question;
-    while (q) {
-        unsigned char name[UDP_MAX];
-        getDomain(q->qname, name);
-        printf("QNAME: %20s ", name);
-        printf("QTYPE: %2d ", q->qtype);
-        printf("QCLASS: %2d\n", q->qclass);
-        q = q->next;
-    }
-}
-
-void RR_info(DNS_RR *rr) {
+// 输出resource record
+void RRInfo(Dns_RR *rr) {
     unsigned char name[UDP_MAX];
-    getDomain(rr->name, name);
+    transDN(rr->name, name);
     printf("NAME:%20s  ", name);
-    printf("TYPE: %d ", rr->type);
-    printf("CLASS: %d ", rr->_class);
-    printf("TTL: %d ", rr->ttl);
-    printf("RDLENGTH: %d ", rr->rdlength);
-    // 根据不同的类型码输出不同的信息
-    switch (rr->type) {
-    case TYPE_A: {
+    printf("TYPE:%2d  ", rr->type);
+    printf("CLASS:%2d\n", rr->_class);
+    printf("TTL:%2d  ", rr->ttl);
+    printf("RDLENGTH:%2d  ", rr->rdlength);
+    if (rr->type == TYPE_A) {
         unsigned char IPv4[20];
-        memset(IPv4, 0, sizeof(IPv4));
-        getIPv4(rr->rdata, IPv4);
-        printf("Address Resource Record:%20s\n", IPv4);
-        break;
+        transIPv4(rr->rdata, IPv4);
+        printf("RDATA:%20s", IPv4);
     }
-    case TYPE_NS:
-    case TYPE_CNAME:
-    case TYPE_PTR:
-        printf("RDATA: %s\n", rr->rdata);
-        break;
-    case TYPE_MX:
-        printf("PREFERENCE: %d ", rr->rdata[0]);
-        printf("EXCHANGE: %s\n", rr->rdata + 1);
-        break;
-    case TYPE_AAAA: {
+    if (rr->type == TYPE_AAAA) {
         unsigned char IPv6[40];
-        getIPv6(rr->rdata, IPv6);
-        printf("IPv6 Address Resource Record: %s\n", IPv6);
-        break;
+        transIPv6(rr->rdata, IPv6);
+        printf("RDATA:%20s", IPv6);
     }
-    case TYPE_SOA:
-        printf("MNAME: %s ", rr->rdata);
-        printf("RNAME: %s\n", rr->rdata + strlen(rr->rdata) + 1);
-        break;
-    case TYPE_TXT:
-        printf("TXT RDATA: %s\n", rr->rdata);
-        break;
-    default:
-        printf("RDATA: %s\n", rr->rdata);
-        break;
-    }
+    printf("\n");
 }
 
-void debug_RR(DNS_MSG *msg) {
-    DNS_RR *rr = msg->RRs;
-    if (msg->header->ancount)
-        puts("------------------------ANSWER------------------------");
+// 输出调试信息
+void debug(Dns_Msg *msg) {
+    printTime();
+    printf("------------------------HEADER------------------------\n");
+    printf("ID:%2d  ", msg->header->id);
+    printf("QR:%2d  ", msg->header->qr);
+    printf("Opcode:%2d  ", msg->header->opcode);
+    printf("AA:%2d  ", msg->header->aa);
+    printf("TC:%2d  ", msg->header->tc);
+    printf("RD:%2d  ", msg->header->rd);
+    printf("RA:%2d\n", msg->header->ra);
+    printf("RCODE:%2d  ", msg->header->rcode);
+    printf("QDCOUNT:%2d  ", msg->header->qdcount);
+    printf("ANCOUNT:%2d  ", msg->header->ancount);
+    printf("NSCOUNT:%2d  ", msg->header->nscount);
+    printf("ARCOUNT:%2d\n", msg->header->arcount);
+
+    Dns_Question *current_que = msg->question;
+    printf("-----------------------QUESTION-----------------------\n");
+    for (int i = 0; i < msg->header->qdcount; i++) {
+        printf("QUESTION %d\n", i + 1);
+        unsigned char name[512];
+        transDN(current_que->qname, name);
+        printf("QNAME:%20s  ", name);
+        printf("QTYPE:%2d  ", current_que->qtype);
+        printf("QCLASS:%2d\n", current_que->qclass);
+        current_que = current_que->next;
+    }
+
+    Dns_RR *rr = msg->RRs;
+    if (msg->header->ancount) {
+        printf("------------------------ANSWER------------------------\n");
+    }
     for (int i = 0; i < msg->header->ancount; i++) {
         printf("RR %d\n", i + 1);
-        RR_info(rr);
+        RRInfo(rr);
         rr = rr->next;
     }
 
-    if (msg->header->nscount)
-        puts("-----------------------AUTHORITY----------------------");
+    if (msg->header->nscount) {
+        printf("-----------------------AUTHORITY----------------------\n");
+    }
     for (int i = 0; i < msg->header->nscount; i++) {
         printf("RR %d\n", i + 1);
-        RR_info(rr);
+        RRInfo(rr);
         rr = rr->next;
     }
 
-    if (msg->header->arcount)
-        puts("----------------------ADDITIONAL----------------------\n");
+    if (msg->header->arcount) {
+        printf("----------------------ADDITIONAL----------------------\n");
+    }
     for (int i = 0; i < msg->header->arcount; i++) {
         printf("RR %d\n", i + 1);
-        RR_info(rr);
+        RRInfo(rr);
         rr = rr->next;
     }
 
-    puts("------------------------------------------------------");
+    printf("------------------------------------------------------\n");
 }
 
-void debug_bytestream(unsigned char *bytestream) {
-    unsigned short offset = 0;
-    DNS_MSG *msg = bytestream_to_dnsmsg(bytestream, &offset);
-    // 打印接收到的DNS查询报文
-    for (int i = 0; i < offset; i++) {
-        // 格式控制: 以十六进制输出,2为指定的输出字段的宽度.如果位数小于2,则左端补0
-        printf("%02x ", bytestream[i]);
-        if ((i + 1) % 16 == 0) {
-            puts("");
+// 输出16进制字节流
+void bytestreamInfo(unsigned char *bytestream) {
+    unsigned short offset;
+    Dns_Msg *msg = bytestream_to_dnsmsg(bytestream, &offset);
+    for (int i = 0; i < (int)(offset); i += 16) {
+        printf("%04lx: ", i);
+        for (int j = i; j < i + 16 && j < (int)(offset); j++) {
+            printf("%02x ", (unsigned char)bytestream[j]);
         }
+        printf("\n");
     }
-    puts("");
     releaseMsg(msg);
-}
-
-void debug_dns_msg_by_bytestream(unsigned char *bytestream) {
-    unsigned short offset = 0;
-    DNS_MSG *msg = bytestream_to_dnsmsg(bytestream, &offset);
-    debug_dns_msg(msg);
-    releaseMsg(msg);
-}
-
-void debug_dns_msg(DNS_MSG *msg) {
-    debug_header(msg);
-    debug_question(msg);
-    debug_RR(msg);
-}
-
-void debug_cache(struct Cache *cache) {
-    puts("------------------------CACHE------------------------");
-    time_t now = time(NULL);
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        printf("Bucket %d\n", i);
-        struct CacheEntry *entry = cache->table[i];
-        if (entry) {
-            printf("Domain: %s\n", entry->domain);
-            if (entry->expireTime < now) {
-                printf("Expired\n");
-            } else {
-                struct tm *local_time = localtime(&now);
-                char time_str[20]; // YYYY-MM-DD HH:MM:SS\0
-                strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", local_time);
-                printf("Expire time: %s\n", time_str);
-            }
-            puts("");
-        }
-    }
-    puts("----------------------------------------------------");
 }

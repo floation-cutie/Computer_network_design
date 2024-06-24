@@ -1,22 +1,34 @@
-#pragma once
+#ifndef DNS_RELAY_SERVER_H 
+#define DNS_RELAY_SERVER_H
 
-#include "cache.h"
+#include "trie.h"  // 本地字典树
+#include "cache.h" // 缓存表
+#include "dns_msg.h"  // DNS报文
+#include "msg_convert.h"  // 报文转换
+#include "dns_function.h"
 #include "debug_info.h"
-#include "dns_msg.h"
-#include "socket.h"
-#include "trie.h"
-// #define THREAD_POOL_SIZE 1000
-#define CACHE_TTL 600 // 对于字典树交给一级缓存的记录，缓存时间为10分钟
-// int block_mode;          // 阻塞/非阻塞模式
-RAII_Socket server_sock; // 客户端socket
-struct Trie *trie;
-struct Cache *cache;
-uint8_t buffer[BUFFER_SIZE]; // 用于DNS消息的缓冲区
+#include "id_converter.h"
 
-void handle_client_request(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len);
-void handle_server_response(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len);
-void handle_client_request_loop(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len);
-void send_dns_response(RAII_Socket sock, DNS_MSG *msg, address_t clientAddr);
-unsigned char *find_ip_in_cache(const unsigned char *domain, int *IP_type);
-void forward_dns_request(RAII_Socket sock, unsigned char *buf, int len);
-void forward_dns_response(RAII_Socket sock, unsigned char *buf, int len, address_t clientAddr);
+#include <stdio.h>
+#include <string.h>
+#include <winsock2.h>
+
+#define CACHE_TTL 60   // 缓存超时时间
+#define MAX_DOMAIN_LENGTH 512   // 域名最大长度
+
+// 处理DNS请求的函数,增加了与用户端通信的socket参数
+void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, struct sockaddr_in clientAddr);
+
+// 查找域名对应的IP地址的函数,增加了与用户端通信的socket参数
+unsigned char *findIpAddress(struct Trie *trie, struct Cache *cache, unsigned char domain[MAX_DOMAIN_LENGTH]);
+
+// 发送DNS响应报文的函数
+void send_dns_response(int sock, Dns_Msg *msg, struct sockaddr_in clientAddr);
+
+// 转发DNS请求报文的函数
+void forward_dns_request(int sock, unsigned char *buf, int len);
+
+// 转发DNS响应报文的函数
+void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr, unsigned short id);
+
+#endif
