@@ -119,6 +119,10 @@
 0.0.0.0 www.cnqb.net
 0.0.0.0 www.coolcdrom.com
 0.0.0.0 zhendeshi.tiebiechang-tiebiechangde.zuichang255zifu.domain-name.com
+0.0.0.0 updates.optionsplus.logitechg.comhttp
+0.0.0.0 mobile.events.data.microsoft.com
+0.0.0.0 osfsr.lenovomm.com
+0.0.0.0 kflow-idle.wpscdn.cn
 0.0.0.0 www.coolseach.com
 0.0.0.0 www.dhchao.com
 0.0.0.0 www.dj3344.com

@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 void getName(unsigned char *qname, const unsigned char *bytestream,
              unsigned short *offset) {
     unsigned short initial_offset = *offset; // 保存初始偏移量

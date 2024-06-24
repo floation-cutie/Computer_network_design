@@ -22,7 +22,6 @@ void getName(unsigned char *qname, const unsigned char *bytestream,
     (*offset)++;
     *qname = '\0'; // 终止字符串
 }
-
 // 获得点分十进制形式的IPv4地址 4字节
 void getIPv4(unsigned char *original, unsigned char *IPv4) {
     sprintf((char *)(IPv4), "%d.%d.%d.%d", ntohs(*(unsigned short *)(original)),
@@ -38,23 +37,16 @@ void getIPv6(unsigned char *original, unsigned char *IPv6) {
 }
 
 void getDomain(unsigned char *original, unsigned char *domain) {
-    unsigned short offset = 0;
-    int count;
-    while (*(original + offset) != 0) {
-        if (*(original + offset) <= 0x40) {
-            count = *(original + offset); // 获取下一个标签的长度
-            (offset)++;
-        }
-        for (int i = 0; i < count; i++) {
-            *domain = *(original + offset); // 复制标签到qname
-            domain++;
-            (offset)++;
-        }
-        if (*(original + offset) != 0) {
-            *domain = '.'; // 添加标签分隔符
-            domain++;
-        }
+    while (*original != 0) {
+        unsigned short len = *original;
+        original++;
+        memcpy(domain, original, len);
+        original += len;
+        domain += len;
+        *domain = '.';
+        domain++;
     }
+    *(domain - 1) = '\0';
 }
 
 void getHeader(DNS_Header *header, const unsigned char *bytestream) {
@@ -338,4 +330,25 @@ void addAnswer(DNS_MSG *msg, const unsigned char *IP, unsigned int _ttl, unsigne
     }
     rr->rdata = (unsigned char *)malloc(sizeof(unsigned char) * rr->rdlength);
     memcpy(rr->rdata, IP, rr->rdlength);
+}
+
+/**
+ * @brief
+ * 从外部DNS服务器返回的报文中提取出域名、IP地址、TTL、类型
+ */
+void getInfoFromServer(const unsigned char *bytestream, unsigned char *DN, unsigned char *IP, unsigned int *_ttl, unsigned short *_type) {
+    unsigned short offset;
+    DNS_MSG *msg = bytestream_to_dnsmsg(bytestream, &offset);
+    getDomain(msg->question->qname, DN);
+    DNS_RR *rr = msg->RRs;
+    while (rr) {
+        if (rr->type == TYPE_A || rr->type == TYPE_AAAA) {
+            *_type = rr->type;
+            memcpy(IP, rr->rdata, rr->rdlength);
+            *_ttl = rr->ttl;
+            break;
+        }
+        rr = rr->next;
+    }
+    releaseMsg(msg);
 }

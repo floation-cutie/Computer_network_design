@@ -98,7 +98,7 @@ typedef struct DNS_MSG {
     DNS_RR *RRs;
 } DNS_MSG;
 
-// 从网络字节中获得域名
+// 从网络字节中获得域名,经转换得到的域名是完整的
 void getName(unsigned char *qname, const unsigned char *bytestream, unsigned short *offset);
 
 void getHeader(DNS_Header *header, const unsigned char *bytestream);
@@ -135,3 +135,5 @@ void releaseMsg(DNS_MSG *msg);
 
 // 生成DNS报文回复
 void addAnswer(DNS_MSG *msg, const unsigned char *IP, unsigned int _ttl, unsigned short _type);
+
+void getInfoFromServer(const unsigned char *bytestream, unsigned char *DN, unsigned char *IP, unsigned int *_ttl, unsigned short *_type);

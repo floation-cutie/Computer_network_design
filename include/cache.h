@@ -9,7 +9,7 @@
 // 联合体,用于存储IPv4和IPv6地址
 // ??
 typedef union {
-    unsigned char ipAddr4[4];  // IPv4 地址
+    unsigned char ipAddr4[16]; // IPv4 地址
     unsigned char ipAddr6[16]; // IPv6 地址
 } IPAddress;
 

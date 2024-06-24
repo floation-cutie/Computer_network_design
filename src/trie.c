@@ -1,5 +1,5 @@
 #include "trie.h"
-
+#include "config.h"
 #define MAX_LINE_LENGTH 512
 
 void initTrie(struct Trie *trie) {
@@ -10,13 +10,13 @@ void initTrie(struct Trie *trie) {
     trie->size = 0;
 }
 
-void loadLocalTable(struct Trie *trie) {
-    FILE *fp = fopen("dnsrelay.txt", "r");
+void loadLocalTable(struct Trie *trie, const char *host_path) {
+    FILE *fp = fopen(host_path, "r");
     if (fp == NULL) {
-        printf("Failed to open dnsrelay.txt\n");
+        printf("Failed to open %s\n", host_path);
         return;
     }
-
+    debug_mode == 1 ? puts("Loading local table...") : 0;
     // 读取文件中的每一行
     char line[MAX_LINE_LENGTH];
     while (fgets(line, MAX_LINE_LENGTH, fp)) {
@@ -26,7 +26,7 @@ void loadLocalTable(struct Trie *trie) {
         // 通过sscanf解析每一行
         // 格式化输出unsigned char
         if (sscanf(line, "%hhu.%hhu.%hhu.%hhu %s", &ip[0], &ip[1], &ip[2], &ip[3], domain) != 5) {
-            printf("Invalid line in dnsrelay.txt: %s\n", line);
+            printf("Invalid line in %s: %s\n", host_path, line);
             continue;
         }
         insertNode(trie, domain, ip);

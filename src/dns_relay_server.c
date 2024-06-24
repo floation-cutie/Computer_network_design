@@ -28,6 +28,9 @@ void forward_dns_response(RAII_Socket sock, unsigned char *buf, int len, address
     if (debug_mode) {
         puts("------- FORWARDING DNS response --------");
     }
+    DNS_MSG *msg = bytestream_to_dnsmsg(buf, (unsigned short *)(&len));
+    debug_dns_msg(msg);
+    printf("The client address is %s\n", inet_ntoa(clientAddr.sin_addr));
     if (socket_send(sock, &clientAddr, buf, len) != 0) {
         return;
     } else {
@@ -65,7 +68,10 @@ unsigned char *find_ip_in_cache(const unsigned char *domain, int *ip_type) {
         int node = findNode(trie, domain);
         if (node != 0) {
             memcpy(ipAddr, trie->toIp[node], sizeof(ipAddr));
-            addEntry(cache, domain, ipAddr, 1, CACHE_TTL);
+            if (*(unsigned int *)ipAddr != 0) {
+                // 如果字典树中的记录为0,则不缓存
+                addEntry(cache, domain, ipAddr, TYPE_A, CACHE_TTL);
+            }
             printf("Search successfully in local dictionary tree!\n,\
                     domain: %s,\
                     IPv4 address: %d.%d.%d.%d\n",
@@ -115,29 +121,105 @@ void handle_client_request(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg,
     // 将DNS消息中的域名转换为缓存对应格式
     unsigned char domain[256];
     getDomain(msg->question->qname, domain);
+    // DEBUG
+    debug_bytestream(dnsmsg_to_bytestream(msg));
     printf("Received DNS request from client, domain: %s\n", domain);
     int ip_type = -1;
-    if ((ipAddress = find_ip_in_cache(domain, &ip_type)) != NULL && (ip_type == msg->question->qtype)) {
+    if ((ipAddress = find_ip_in_cache(domain, &ip_type)) != NULL && (ip_type == msg->question->qtype)
+        || (ip_type == TYPE_A && *(unsigned int *)(ipAddress) == 0)) {
         // 如果缓存内容与查询要求版本一致
         // 直接对DNS请求进行扩充
-        puts("Find the domain in cache table, directly send the response to client");
+        puts("Find the domain in 2-level cache, directly send the response to client");
         addAnswer(msg, ipAddress, ip_type, CACHE_TTL);
         send_dns_response(sock, msg, clientAddr);
         return;
     } else {
-        // 如果缓存内容与查询要求版本不一致
         // 构造ID映射,转发请求到远程DNS服务器
         unsigned short original_id = msg->header->id;
         unsigned short relay_id = generate_unique_id();
         // 将ID映射关系添加到映射表中
-        add_id_mapping(original_id, relay_id, clientAddr);
+        store_id_mapping(original_id, relay_id, clientAddr, sizeof(clientAddr));
         // 修改DNS消息头部
-        msg->header->id = htons(relay_id);
+        msg->header->id = relay_id;
         // 将DNS消息转换为字节流
-        unsigned char buf[1024];
-        unsigned short offset = 0;
-        dnsmsg_to_bytestream(msg, buf, &offset);
+        unsigned char *buf = dnsmsg_to_bytestream(msg);
+        printf("The id mapping is %d -> %d, client address is %s\n", original_id, relay_id, inet_ntoa(clientAddr.sin_addr));
         // 转发DNS请求
-        forward_dns_request(sock, buf, offset);
+        forward_dns_request(sock, buf, len);
+        free(buf);
     }
+}
+
+void handle_client_request_loop(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len) {
+    // 处理DNS请求
+    puts(" ---------- handle_client_request_loop ----------");
+    handle_client_request(sock, clientAddr, msg, len);
+    free(msg);
+    while (true) {
+        // 接收DNS请求
+        unsigned char buffer[BUFFER_SIZE];
+        address_t clientAddr;
+        int nbytes = -1;
+        int len = socket_recv(sock, &clientAddr, buffer, sizeof(buffer), &nbytes);
+        if (len == -1) {
+            continue;
+        }
+        if (debug_mode) {
+            printf("Received %d bytes from client\n", len);
+        }
+        // 解析DNS消息
+        unsigned short offset = 0;
+        DNS_MSG *msg = bytestream_to_dnsmsg(buffer, &offset);
+        if (msg == NULL) {
+            printf("Failed to parse DNS message\n");
+            exit(EXIT_FAILURE);
+        }
+        if (msg->header->qr == HEADER_QR_QUERY && msg->header->opcode == HEADER_OPCODE_QUERY) {
+            // 如果请求是标准查询请求,且个数为1,则直接处理
+            if (msg->header->qdcount != 1) {
+                printf("Unsupported: query qdcount is %d instead of 1, discarded\n", msg->header->qdcount);
+            } else {
+                handle_client_request(sock, clientAddr, msg, len);
+            }
+        }
+        releaseMsg(msg);
+    }
+}
+
+/**
+ * @brief
+ * 处理远程DNS服务器的响应
+ * @param sock 服务器socket
+ * @param clientAddr 客户端地址
+ * @param msg DNS消息
+ * @param len 消息长度
+ * @return void
+ */
+void handle_server_response(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg, int len) {
+    // 从远程DNS服务器接收到响应
+    puts(" ---------- handle_server_response ----------");
+
+    unsigned short relay_id = msg->header->id;
+    socklen_t addr_len;
+    unsigned short original_id = get_original_id(relay_id, &clientAddr, &addr_len);
+    msg->header->id = original_id;
+    printf("Received DNS response from remote server, relay_id: %d   Original ID: %d\n", relay_id, original_id);
+    unsigned char *ip = inet_ntoa(clientAddr.sin_addr);
+    printf("The client address is %s\n", ip);
+    // 将DNS消息转换为字节流
+    unsigned char *buf = dnsmsg_to_bytestream(msg);
+    // debug_mode == 1 ? debug_bytestream(buf) : 0;
+
+    if (strcmp("0.0.0.0", ip) != 0) {
+        // 存入缓存中
+        unsigned char domain[UDP_MAX];
+        unsigned char ipAddr[16];
+        unsigned int ttl;
+        unsigned short type;
+        getInfoFromServer(buf, domain, ipAddr, &ttl, &type);
+        addEntry(cache, domain, ipAddr, type, ttl);
+        // 转发DNS响应
+        forward_dns_response(sock, buf, len, clientAddr);
+    }
+    free(buf);
 }

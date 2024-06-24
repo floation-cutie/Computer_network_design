@@ -28,7 +28,7 @@ struct Trie // Trie树 用于存储域名和IP地址的对应关系
 void initTrie(struct Trie *trie);
 
 // 从dnsrelay.txt文件中读取域名和IP地址,并插入到Trie树中
-void loadLocalTable(struct Trie *trie);
+void loadLocalTable(struct Trie *trie, const char *host_path);
 
 // 将域名简化,即将域名中的大写字母转换成小写字母
 void simplifyDomain(char domain[]);

@@ -15,7 +15,7 @@ void init(int argc, char *argv[], struct Cache *cache, struct Trie *trie) {
 
     /* 初始化二级缓存 */
     initTrie(trie);
-    loadLocalTable(trie);
+    loadLocalTable(trie, host_path);
 }
 
 void print_help_info() {

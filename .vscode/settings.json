@@ -12,6 +12,9 @@
         "config.h": "c",
         "getopt.h": "c",
         "id_convert.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "time.h": "c",
+        "cache.h": "c",
+        "thread_pool.h": "c"
     }
 }

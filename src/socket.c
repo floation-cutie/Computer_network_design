@@ -46,8 +46,11 @@ int socket_recv(RAII_Socket s, address_t *from, void *buffer, int maxlength, int
     *len = recvfrom(s.sockfd, buffer, maxlength, 0, (struct sockaddr *)from, &fromlen);
     if (*len == SOCKET_ERROR) {
         printf("recvfrom() failed. Error Code: %d\n", WSAGetLastError());
-        cleanup_socket(&s);
-        return -1;
+
+        if (WSAGetLastError() != WSAECONNRESET) {
+            cleanup_socket(&s);
+            return -1;
+        }
     }
     return 0;
 }

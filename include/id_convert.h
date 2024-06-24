@@ -3,9 +3,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <time.h>
 #define MAX_ID_MAPPING_SIZE 65536
-
+#define EXPIRE_TIME 60
 /*
  * 用于存储原始ID和中继ID之间的映射关系
  * 由于ID是16位的，所以最多有2^16个ID
@@ -16,6 +16,7 @@ typedef struct {
     unsigned short relay_id;
     address_t client_addr; // 对应的客户端地址
     socklen_t addr_len;
+    time_t timestamp; // 记录映射关系的时间戳
 } id_mapping_t;
 
 pthread_mutex_t id_mapping_lock;

@@ -15,6 +15,9 @@ unsigned short generate_unique_id() {
     unsigned short unique_id;
     pthread_mutex_lock(&id_mapping_lock);
     current_id = (current_id + 1) % MAX_ID_MAPPING_SIZE;
+    while (id_mapping[current_id].timestamp != 0 && id_mapping[current_id].timestamp + EXPIRE_TIME < time(NULL)) {
+        current_id = (current_id + 1) % MAX_ID_MAPPING_SIZE;
+    }
     unique_id = current_id; // 在持有锁的情况下保存当前的id到unique_id
     pthread_mutex_unlock(&id_mapping_lock);
     return unique_id; // 返回保存的unique_id
@@ -26,6 +29,7 @@ void store_id_mapping(unsigned short original_id, unsigned short relay_id, struc
     id_mapping[relay_id].relay_id = relay_id;
     id_mapping[relay_id].client_addr = client_addr;
     id_mapping[relay_id].addr_len = addr_len;
+    id_mapping[relay_id].timestamp = time(NULL);
     pthread_mutex_unlock(&id_mapping_lock);
 }
 
