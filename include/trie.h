@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _TRIE_H_
+#define _TRIE_H_
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -7,7 +8,7 @@
 #include <string.h>
 
 #define MAX_NODE 1000001
-#define MAX_ALPHABET 26 + 10 + 2 // 三类字符:数字,字母,点,减号
+#define MAX_ALPHABET 26 + 10 + 2
 
 struct Node // 域名节点
 {
@@ -15,11 +16,11 @@ struct Node // 域名节点
     struct Node *next;
 };
 
-struct Trie // Trie树 用于存储域名和IP地址的对应关系
+struct Trie // Trie树
 {
     int tree[MAX_NODE][MAX_ALPHABET]; // 字典树
     int prefix[MAX_NODE];             // 前缀
-    bool isEnd[MAX_NODE];             // 该结点结尾的字符串是否存在
+    bool isEnd[MAX_NODE];             // 是否是单词结尾
     int size;                         // 总节点数
     unsigned char toIp[MAX_NODE][4];  // IP地址
 };
@@ -41,3 +42,5 @@ void deleteNode(struct Trie *trie, const unsigned char domain[]);
 
 // 查找域名
 int findNode(struct Trie *trie, const unsigned char domain[]);
+
+#endif // _TRIE_H_

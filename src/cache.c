@@ -1,3 +1,4 @@
+
 #include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,8 +14,8 @@ void initCache(struct Cache *cache) {
 
 // 计算哈希值
 unsigned int hashCode(const unsigned char *domain) {
-    uint32_t hashValue = murmurHash32(domain, strlen((const char *)domain), 0) % CACHE_SIZE; // 调用 MurmurHash 算法计算哈希值
-    return (unsigned int)hashValue;                                                          // 返回哈希值
+    uint32_t hashValue = MurmurHash(domain, strlen((const char *)domain), 0) % CACHE_SIZE; // 调用 MurmurHash 算法计算哈希值
+    return (unsigned int)hashValue;                                                        // 返回哈希值
 }
 
 /**
@@ -31,9 +32,8 @@ int findEntry(struct Cache *cache, const unsigned char *domain, unsigned char *i
     unsigned int hash = hashCode(domain);            // 获取哈希值
     time_t now = time(NULL);                         // 获取当前时间
 
-    if (cache->head == cache->tail) {
+    if (cache->head != cache->tail) {
         removeExpiredEntries(cache);
-        return 0;
     }
     // 遍历哈希表
     struct CacheEntry *entry = cache->table[hash];
