@@ -24,9 +24,7 @@ void getName(unsigned char *qname, const unsigned char *bytestream,
 }
 // 获得点分十进制形式的IPv4地址 4字节
 void getIPv4(unsigned char *original, unsigned char *IPv4) {
-    sprintf((char *)(IPv4), "%d.%d.%d.%d", ntohs(*(unsigned short *)(original)),
-            ntohs(*(unsigned short *)(original + 1)), ntohs(*(unsigned short *)(original + 2)),
-            ntohs(*(unsigned short *)(original + 3)));
+    sprintf((char *)(IPv4), "%d.%d.%d.%d", original[0], original[1], original[2], original[3]);
 }
 
 // 获得冒分十六进制形式的IPv6地址 16字节

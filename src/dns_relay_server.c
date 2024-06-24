@@ -205,7 +205,7 @@ void handle_server_response(RAII_Socket sock, address_t clientAddr, DNS_MSG *msg
     msg->header->id = original_id;
     printf("Received DNS response from remote server, relay_id: %d   Original ID: %d\n", relay_id, original_id);
     unsigned char *ip = inet_ntoa(clientAddr.sin_addr);
-    printf("The client address is %s\n", ip);
+    printf("The client address is %s\n the port is %d", ip, ntohs(clientAddr.sin_port));
     // 将DNS消息转换为字节流
     unsigned char *buf = dnsmsg_to_bytestream(msg);
     // debug_mode == 1 ? debug_bytestream(buf) : 0;

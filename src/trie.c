@@ -60,7 +60,6 @@ void insertNode(struct Trie *trie, const char domain[], unsigned char ipAddr[4])
     strcpy(temp, domain);
     simplifyDomain(temp);
     int parent = 0;
-    // 遍历域名的每个字符
     for (int i = 0; i < len; i++) {
         int id;
         if (temp[i] >= '0' && temp[i] <= '9')

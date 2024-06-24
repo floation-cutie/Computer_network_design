@@ -59,7 +59,7 @@ void RR_info(DNS_RR *rr) {
         unsigned char IPv4[20];
         memset(IPv4, 0, sizeof(IPv4));
         getIPv4(rr->rdata, IPv4);
-        printf("Address Resource Record:%20s", IPv4);
+        printf("Address Resource Record:%20s\n", IPv4);
         break;
     }
     case TYPE_NS:
