@@ -79,7 +79,7 @@ void getQuestion(DNS_Question *quesiton, const unsigned char *bytestream, unsign
 
 // 从字节流中提取RR的内容
 void getRR(DNS_RR *RR, const unsigned char *bytestream, unsigned short *offset) {
-    RR->name = (unsigned char *)malloc(sizeof(unsigned char) * UDP_MAX);
+    RR->name = (unsigned char *)malloc(256); // 假定最大域名长度为256字节
     if (!RR->name) {
         puts("动态分配内存失败");
         exit(1);
@@ -93,7 +93,11 @@ void getRR(DNS_RR *RR, const unsigned char *bytestream, unsigned short *offset) 
     (*offset) += 4;
     RR->rdlength = ntohs(*(unsigned short *)(bytestream + *offset));
     (*offset) += 2;
-    RR->rdata = (unsigned char *)malloc(sizeof(unsigned char) * RR->rdlength + 1);
+    RR->rdata = (unsigned char *)malloc(RR->rdlength + 1); // 为rdata分配内存
+    if (!RR->rdata) {
+        puts("动态分配内存失败");
+        exit(1);
+    }
     memcpy(RR->rdata, bytestream + *offset, RR->rdlength);
     RR->rdata[RR->rdlength] = '\0';
     (*offset) += RR->rdlength;
@@ -201,28 +205,29 @@ void putQuestion(const DNS_Question *que, unsigned char *bytestream, unsigned sh
 
 // 将RR填入字节流
 void putRR(const DNS_RR *rr, unsigned char *bytestream, unsigned short *offset) {
-    memcpy(bytestream + *offset, rr->name, strlen((char *)(rr->name)) + 1);
-    (*offset) += strlen((char *)(rr->name)) + 1;
-    *(bytestream + *offset) = rr->type >> 8;
-    (*offset)++;
-    *(bytestream + *offset) = rr->type;
-    (*offset)++;
-    *(bytestream + *offset) = rr->_class >> 8;
-    (*offset)++;
-    *(bytestream + *offset) = rr->_class;
-    (*offset)++;
-    *(bytestream + *offset) = rr->ttl >> 24;
-    (*offset)++;
-    *(bytestream + *offset) = rr->ttl >> 16;
-    (*offset)++;
-    *(bytestream + *offset) = rr->ttl >> 8;
-    (*offset)++;
-    *(bytestream + *offset) = rr->ttl;
-    (*offset)++;
-    *(bytestream + *offset) = rr->rdlength >> 8;
-    (*offset)++;
-    *(bytestream + *offset) = rr->rdlength;
-    (*offset)++;
+    size_t name_len = strlen((char *)(rr->name)) + 1; // 包括终止符
+
+    // 将name复制到字节流中
+    memcpy(bytestream + *offset, rr->name, name_len);
+    (*offset) += name_len;
+
+    // 将type转换为网络字节序并写入字节流
+    *(unsigned short *)(bytestream + *offset) = htons(rr->type);
+    (*offset) += 2;
+
+    // 将class转换为网络字节序并写入字节流
+    *(unsigned short *)(bytestream + *offset) = htons(rr->_class);
+    (*offset) += 2;
+
+    // 将ttl转换为网络字节序并写入字节流
+    *(unsigned int *)(bytestream + *offset) = htonl(rr->ttl);
+    (*offset) += 4;
+
+    // 将rdlength转换为网络字节序并写入字节流
+    *(unsigned short *)(bytestream + *offset) = htons(rr->rdlength);
+    (*offset) += 2;
+
+    // 将rdata复制到字节流中
     memcpy(bytestream + *offset, rr->rdata, rr->rdlength);
     (*offset) += rr->rdlength;
 }
