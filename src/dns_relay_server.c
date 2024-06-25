@@ -97,7 +97,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 unsigned char *cname_buf = dnsmsg_to_bytestream(temp);
                 unsigned short sendLen = 0;
                 Dns_Msg *temp2 = bytestream_to_dnsmsg(cname_buf, &sendLen);
-                printf("The send about cname is %d length\n", sendLen);
+                // printf("The send about cname is %d length\n", sendLen);
                 free(ipAddr);
                 releaseMsg(temp);
                 releaseMsg(temp2);
@@ -105,7 +105,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 forward_dns_request(sock, cname_buf, sendLen);
                 free(domain);
                 free(cname_buf);
-            } else if (type == TYPE_A || type == TYPE_AAAA) {
+            } else {
                 const struct sockaddr_in result = find_clientAddr(msg->header->id); // 通过id找到客户端地址
                 unsigned short original_id = find_id(msg->header->id);              // 通过id找到原始id
                 buf[0] = original_id >> 8;
@@ -183,7 +183,7 @@ void send_dns_response(int sock, Dns_Msg *msg, unsigned char *buf, struct sockad
     // 计算bytestream的长度
     // 考虑到int 和 unsigned short 的长度不同，会出现相关问题
     Dns_Msg *temp = bytestream_to_dnsmsg(bytestream, (&len));
-    printf("The length of bytestream is %d\n", len);
+    // printf("The length of bytestream is %d\n", len);
     int ret = sendto(sock, (const char *)bytestream, len, 0, (struct sockaddr *)&clientAddr, sizeof(clientAddr));
     if (ret == SOCKET_ERROR)
         printf("send failed with error: %d\n", WSAGetLastError());
@@ -226,7 +226,7 @@ void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr
         debug_mode == 1 ? bytestreamInfo(buf) : (void)0; // 打印bytestream信息
         unsigned short offset;
         Dns_Msg *msg = bytestream_to_dnsmsg(buf, &offset);
-        debug(msg);
+        debug_mode == 1 ? debug(msg) : (void)0; // 打印DNS报文信息
         releaseMsg(msg);
         puts("Forward DNS response to client successfully");
     }
