@@ -14,8 +14,6 @@ void addAnswer(Dns_Msg *msg, const unsigned char *IP, unsigned int _ttl, unsigne
     }
     // 设置header字段的值
     msg->header->qr = HEADER_QR_ANSWER;
-    msg->header->rd = 1;
-    msg->header->ra = 1;
     msg->header->ancount++;
 
     // 为answer字段添加一个Resource Record
