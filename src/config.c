@@ -54,6 +54,7 @@ void print_help_info() {
 /* 读取程序命令参数 */
 void get_config(int argc, char *argv[]) {
     int opt;
+    timer = 200;
     while ((opt = getopt(argc, argv, "hdp:l:s:t:")) != -1) {
         switch (opt) {
         case 'h':
