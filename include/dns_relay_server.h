@@ -29,6 +29,6 @@ void send_dns_response(int sock, Dns_Msg *msg, unsigned char *buf, struct sockad
 void forward_dns_request(int sock, unsigned char *buf, int len);
 
 // 转发DNS响应报文的函数
-void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr, unsigned short id);
+void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr);
 
 #endif
