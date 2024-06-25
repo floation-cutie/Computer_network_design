@@ -10,6 +10,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
     unsigned short offset = 0;
     // 解析DNS报文
     while (1) {
+        delete_overtime(sock);
         unsigned char *buf = (unsigned char *)malloc(sizeof(unsigned char) * MAX_DNS_PACKET_SIZE);
         // 接收来自用户端的DNS请求字节流
         int clientAddrLen = sizeof(clientAddr);
@@ -56,10 +57,13 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 buf[1] = newId;
                 free(domain);
                 forward_dns_request(sock, buf, len); // 转发DNS请求报文给远程DNS服务器
+                start_timer(buf, len);
             }
 
         } else if (msg->header->qr == HEADER_QR_ANSWER) // 处理从远程DNS服务器返回的DNS响应报文
         {
+            unsigned short id = (unsigned short)buf[0] << 8 | (unsigned short)buf[1];
+            stop_timer(id);
             log_message("Receiving message from remote DNS server");
             unsigned char *domain = (unsigned char *)malloc(sizeof(unsigned char) * MAX_DOMAIN_LENGTH);
             unsigned char *ipAddr = malloc(sizeof(unsigned char) * MAX_DOMAIN_LENGTH);
@@ -104,6 +108,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 releaseMsg(temp2);
                 // 构造新的转发包向服务器进行通信
                 forward_dns_request(sock, cname_buf, sendLen);
+                start_timer(cname_buf, sendLen);
                 free(domain);
                 free(cname_buf);
             } else {
@@ -121,6 +126,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
             buf[0] = newId >> 8;
             buf[1] = newId;
             forward_dns_request(sock, buf, len); // 转发DNS请求报文给远程DNS服务器
+            start_timer(buf, len);
         }
 
         removeExpiredEntries(cache); // 每次处理完一个DNS请求,删除过期的缓存记录
@@ -232,5 +238,84 @@ void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr
         if (debug_mode) debug(msg); // 打印DNS报文信息
         releaseMsg(msg);
         log_message("Forward DNS response to client successfully");
+    }
+}
+
+void init_timer(){
+    printf("in init_timer\n");
+    timer_header = (struct timer *)malloc(sizeof(struct timer)), timer_tail = (struct timer *)malloc(sizeof(struct timer));
+    timer_header->next = timer_tail;
+    timer_header->front = NULL;
+    timer_tail->front = timer_header;
+    timer_tail->next = NULL;
+    timer_header->msg = timer_tail->msg = NULL;
+}
+
+void start_timer(unsigned char* buf, int len){
+    printf("in start_timer\n");
+    struct timer* start_t = (struct timer *)malloc(sizeof(struct timer));
+    start_t->next = timer_header->next;
+    start_t->front = timer_header;
+    timer_header->next->front = start_t;
+    timer_header->next = start_t;
+
+    clock_t now = clock();
+    start_t->now = now;
+    start_t->repeated = 0;
+    start_t->len = len;
+    start_t->msg = (unsigned char*)malloc((len + 1) * sizeof(unsigned char));
+    memcpy(start_t->msg, buf, len);
+    start_t->msg[len] = '\0';
+    start_t->id = (unsigned short)buf[0] << 8 | (unsigned short)buf[1]; 
+}
+
+void stop_timer(unsigned short dns_id){
+    printf("in stop_timer\n");
+    struct timer* tmp = timer_header;
+    int find = 0;
+    
+    while(tmp->next && tmp->next->next && !find) {
+        if(tmp->next->id == dns_id){
+            struct timer* d_tmp = tmp->next;
+            tmp->next = tmp->next->next;
+            if (tmp->next != NULL) {
+                tmp->next->front = tmp;
+            }
+            free(d_tmp->msg);
+            free(d_tmp);
+            find = 1;
+        }
+        tmp = tmp->next;
+    }
+}
+
+
+void delete_overtime(SOCKET sock){
+    printf("in delete_overtime\n");
+    struct timer* tmp = timer_tail;
+    struct timer* d_tmp;
+    
+    clock_t now = clock();
+
+    while(tmp->front && tmp->front->front){
+        if(now - tmp->front->now  <= CLOCKS_PER_SEC * timer / 1000){
+            tmp = tmp->front;
+        }else{
+            if(tmp->front->repeated < 3 && now - tmp->front->now  <= CLOCKS_PER_SEC){
+                d_tmp = tmp->front;
+                printf("timeout and repeated %d\n", d_tmp->repeated + 1);
+                forward_dns_request(sock, d_tmp->msg, d_tmp->len);
+                d_tmp->repeated++, d_tmp->now = now;
+                d_tmp->next = timer_header->next;
+                d_tmp->front = timer_header;
+                timer_header->next->front = d_tmp;
+                timer_header->next = d_tmp;
+            }
+            d_tmp = tmp->front;
+            tmp->front->front->next = tmp;
+            tmp->front = tmp->front->front;
+            free(d_tmp->msg);
+            free(d_tmp);
+        }
     }
 }
