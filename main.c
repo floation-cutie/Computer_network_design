@@ -34,6 +34,9 @@ int main(int argc, char *argv[]) {
     struct ThreadPool threadPool;
     init_thread_pool(&threadPool);
 
+    // 初始化计时器
+    init_timer();
+    
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         log_message("Init Windows Socket Failed");
