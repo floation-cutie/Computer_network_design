@@ -1,3 +1,4 @@
+
 #include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,8 +14,8 @@ void initCache(struct Cache *cache) {
 
 // 计算哈希值
 unsigned int hashCode(const unsigned char *domain) {
-    uint32_t hashValue = murmurHash32(domain, strlen((const char *)domain), 0) % CACHE_SIZE; // 调用 MurmurHash 算法计算哈希值
-    return (unsigned int)hashValue;                                                          // 返回哈希值
+    uint32_t hashValue = MurmurHash(domain, strlen((const char *)domain), 0) % CACHE_SIZE; // 调用 MurmurHash 算法计算哈希值
+    return (unsigned int)hashValue;                                                        // 返回哈希值
 }
 
 /**
@@ -31,9 +32,8 @@ int findEntry(struct Cache *cache, const unsigned char *domain, unsigned char *i
     unsigned int hash = hashCode(domain);            // 获取哈希值
     time_t now = time(NULL);                         // 获取当前时间
 
-    if (cache->head == cache->tail) {
+    if (cache->head != cache->tail) {
         removeExpiredEntries(cache);
-        return 0;
     }
     // 遍历哈希表
     struct CacheEntry *entry = cache->table[hash];
@@ -110,11 +110,19 @@ void addEntry(struct Cache *cache, const unsigned char *domain, const unsigned c
     entry->domain[domainLen] = '\0';
 
     // 复制IP地址
-    if (ipVersion == TYPE_A)
-        memcpy(entry->ipAddr.ipAddr4, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr4));
-    else if (ipVersion == TYPE_AAAA)
-        memcpy(entry->ipAddr.ipAddr6, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr6));
-
+    if (ipVersion == TYPE_A) {
+        memcpy(entry->ipAddr.ipAddr4, ipAddr, sizeof(entry->ipAddr.ipAddr4));
+        // printf("add truly IPv4 address in: %d.%d.%d.%d\n",
+        //        entry->ipAddr.ipAddr4[0], entry->ipAddr.ipAddr4[1], entry->ipAddr.ipAddr4[2], entry->ipAddr.ipAddr4[3]);
+    } else if (ipVersion == TYPE_AAAA)
+        memcpy(entry->ipAddr.ipAddr6, ipAddr, sizeof(entry->ipAddr.ipAddr6));
+    // printf("add truly IPv6 address:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
+    //        entry->ipAddr.ipAddr6[0], entry->ipAddr.ipAddr6[1], entry->ipAddr.ipAddr6[2],
+    //        entry->ipAddr.ipAddr6[3], entry->ipAddr.ipAddr6[4], entry->ipAddr.ipAddr6[5],
+    //        entry->ipAddr.ipAddr6[6], entry->ipAddr.ipAddr6[7], entry->ipAddr.ipAddr6[8],
+    //        entry->ipAddr.ipAddr6[9], entry->ipAddr.ipAddr6[10], entry->ipAddr.ipAddr6[11],
+    //        entry->ipAddr.ipAddr6[12], entry->ipAddr.ipAddr6[13], entry->ipAddr.ipAddr6[14],
+    //        entry->ipAddr.ipAddr6[15]);
     // 设置过期时间
     entry->expireTime = now + ttl;
 
