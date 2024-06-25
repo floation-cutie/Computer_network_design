@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <winsock2.h>
 
-#define MAX_THREADS 30 // 线程池大小
+#define MAX_THREADS 100 // 线程池大小
 
 // 结构体,用于传递给线程的参数
 struct ThreadParam {
