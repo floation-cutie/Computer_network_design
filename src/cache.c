@@ -110,11 +110,19 @@ void addEntry(struct Cache *cache, const unsigned char *domain, const unsigned c
     entry->domain[domainLen] = '\0';
 
     // 复制IP地址
-    if (ipVersion == TYPE_A)
-        memcpy(entry->ipAddr.ipAddr4, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr4));
-    else if (ipVersion == TYPE_AAAA)
-        memcpy(entry->ipAddr.ipAddr6, (void *)&ipAddr, sizeof(entry->ipAddr.ipAddr6));
-
+    if (ipVersion == TYPE_A) {
+        memcpy(entry->ipAddr.ipAddr4, ipAddr, sizeof(entry->ipAddr.ipAddr4));
+        // printf("add truly IPv4 address in: %d.%d.%d.%d\n",
+        //        entry->ipAddr.ipAddr4[0], entry->ipAddr.ipAddr4[1], entry->ipAddr.ipAddr4[2], entry->ipAddr.ipAddr4[3]);
+    } else if (ipVersion == TYPE_AAAA)
+        memcpy(entry->ipAddr.ipAddr6, ipAddr, sizeof(entry->ipAddr.ipAddr6));
+    // printf("add truly IPv6 address:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
+    //        entry->ipAddr.ipAddr6[0], entry->ipAddr.ipAddr6[1], entry->ipAddr.ipAddr6[2],
+    //        entry->ipAddr.ipAddr6[3], entry->ipAddr.ipAddr6[4], entry->ipAddr.ipAddr6[5],
+    //        entry->ipAddr.ipAddr6[6], entry->ipAddr.ipAddr6[7], entry->ipAddr.ipAddr6[8],
+    //        entry->ipAddr.ipAddr6[9], entry->ipAddr.ipAddr6[10], entry->ipAddr.ipAddr6[11],
+    //        entry->ipAddr.ipAddr6[12], entry->ipAddr.ipAddr6[13], entry->ipAddr.ipAddr6[14],
+    //        entry->ipAddr.ipAddr6[15]);
     // 设置过期时间
     entry->expireTime = now + ttl;
 
