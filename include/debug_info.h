@@ -1,26 +1,18 @@
-#pragma once
+#ifndef DEBUG_INFO_H
+#define DEBUG_INFO_H
 
-#include "cache.h"
 #include "dns_msg.h"
 
-// 统计信息(后续)
-static uint64_t query_count, cache_hit_count, cache_outdate_count;
-static uint64_t remote_send_count, remote_recv_count;
+// 输出调试信息
+void debug(Dns_Msg *msg);
 
-void debug_header(DNS_MSG *msg);
+// 输出resource record
+void RRInfo(Dns_RR *rr);
 
-void debug_question(DNS_MSG *msg);
+// 输出16进制字节流
+void bytestreamInfo(unsigned char *bytestream);
 
-void RR_info(DNS_RR *rr);
+// 打印程序执行时间
+void printTime();
 
-void debug_RR(DNS_MSG *msg);
-
-void debug_time(); // 输出程序运行时间
-
-void debug_dns_msg(DNS_MSG *msg);
-
-void debug_bytestream(unsigned char *bytestream);
-
-void debug_cache(struct Cache *cache);
-
-void debug_dns_msg_by_bytestream(unsigned char *bytestream);
+#endif // DEBUG_INFO_H
