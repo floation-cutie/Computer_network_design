@@ -31,4 +31,23 @@ void forward_dns_request(int sock, unsigned char *buf, int len);
 // 转发DNS响应报文的函数
 void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr);
 
+struct timer{
+    clock_t now;
+    unsigned char* msg;
+    unsigned short id;
+    size_t len;
+    struct timer* next, *front;
+    int repeated;
+};
+
+struct timer *timer_header, *timer_tail;
+
+void init_timer();
+
+void start_timer(unsigned char* buf, int len);
+
+void stop_timer(unsigned short);
+
+void delete_overtime(SOCKET sock);
+
 #endif
