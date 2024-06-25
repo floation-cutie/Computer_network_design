@@ -7,11 +7,9 @@ extern int debug_mode;
 // 通过线程池并发处理DNS请求
 void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, struct sockaddr_in clientAddr) {
     unsigned short offset = 0;
-    unsigned char buf[MAX_DNS_PACKET_SIZE]; // 收到的DNS请求字节流
-    // 将 char 缓冲区中的数据复制到 unsigned char 缓冲区中
-    // memcpy(buf, recvBuf, len);
     // 解析DNS报文
     while (1) {
+        unsigned char *buf = (unsigned char *)malloc(sizeof(unsigned char) * MAX_DNS_PACKET_SIZE);
         // 接收来自用户端的DNS请求字节流
         int clientAddrLen = sizeof(clientAddr);
         int len = recvfrom(sock, (char *)buf, MAX_DNS_PACKET_SIZE, 0, (struct sockaddr *)&clientAddr, &clientAddrLen);
@@ -27,31 +25,39 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
 
         if (msg->header->qr == HEADER_QR_QUERY && msg->header->opcode == HEADER_OPCODE_QUERY) // 只处理DNS请求报文
         {
-            unsigned char domain[MAX_DOMAIN_LENGTH];
+            unsigned char *domain = (unsigned char *)malloc(sizeof(unsigned char) * MAX_DOMAIN_LENGTH);
             transDN(msg->question->qname, domain); // 取出域名
             printf("Receving message from %s:%d,the length is %d bytes.\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), len);
             int ip_type = -1;
             unsigned char *ipAddress = findIpAddress(trie, cache, domain, &ip_type); // 查找域名对应的IP地址
-            if ((ipAddress != NULL && (ip_type == msg->question->qtype)))            // 如果找到了,则发送DNS响应报文
+            if ((ipAddress != NULL && (ip_type == msg->question->qtype))
+                || (ip_type == TYPE_A && (*(unsigned int *)ipAddress == 0))) // 如果找到了,则发送DNS响应报文
             {
                 printf("Find in cache!\n");
-                addAnswer(msg, ipAddress, CACHE_TTL, msg->question->qtype); // 将IP地址添加到DNS响应报文中
+                addAnswer(msg, ipAddress, CACHE_TTL, ip_type); // 将IP地址添加到DNS响应报文中
                 printf("Sending DNS reponse for domain %s...\n", domain);
-                debug(msg);
+                if (debug_mode)
+                    debug(msg);
                 puts("Always ready to send DNS response");
+                free(domain);
                 send_dns_response(sock, msg, buf, clientAddr); // 发送DNS响应报文
             } else                                             // 如果没找到,则转发DNS请求报文给远程DNS服务器
             {
+                puts("The default entrance for DNS message");
+                if (debug_mode)
+                    debug(msg);
                 // 将id和客户端绑定,产生新的id
                 unsigned short newId = trans_port_id(msg->header->id, clientAddr);
                 buf[0] = newId >> 8;
                 buf[1] = newId;
+                free(domain);
                 forward_dns_request(sock, buf, len); // 转发DNS请求报文给远程DNS服务器
             }
+
         } else if (msg->header->qr == HEADER_QR_ANSWER) // 处理从远程DNS服务器返回的DNS响应报文
         {
             puts("Receving message from remote DNS server");
-            unsigned char domain[MAX_DOMAIN_LENGTH];
+            unsigned char *domain = (unsigned char *)malloc(sizeof(unsigned char) * MAX_DOMAIN_LENGTH);
             unsigned char *ipAddr = malloc(sizeof(unsigned char) * MAX_DOMAIN_LENGTH);
             unsigned int ttl;
             unsigned short type;
@@ -63,8 +69,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 IPv4 address: %d.%d.%d.%d\n",
                        domain, ipAddr[0], ipAddr[1], ipAddr[2], ipAddr[3]);
                 addEntry(cache, domain, ipAddr, type, ttl);
-            }
-            if (type == TYPE_AAAA) {
+            } else if (type == TYPE_AAAA) {
                 printf("Receiving from remote DNS server about DNS message\n\
                 domain: %s,\
                 IPv6 address:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",
@@ -76,10 +81,8 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
             }
             // 迭代查询
             if (type == TYPE_CNAME) {
-                unsigned char domain[MAX_DOMAIN_LENGTH];
                 transDN(ipAddr, domain);
                 printf("\nThe CNAME domain is %s\n", domain);
-
                 unsigned short temp_offset = 0;
                 Dns_Msg *temp = bytestream_to_dnsmsg(buf, &temp_offset);
                 temp->header->qr = HEADER_QR_QUERY;
@@ -96,6 +99,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 // 构造新的转发包向服务器进行通信
                 forward_dns_request(sock, cname_buf, UDP_MAX);
                 releaseMsg(temp);
+                free(domain);
                 free(cname_buf);
             } else {
                 const struct sockaddr_in result = find_clientAddr(msg->header->id); // 通过id找到客户端地址
@@ -103,7 +107,8 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
                 buf[0] = original_id >> 8;
                 buf[1] = original_id;
                 free(ipAddr);
-                forward_dns_response(sock, buf, len, result, msg->header->id); // 转发DNS响应报文给用户端
+                free(domain);
+                forward_dns_response(sock, buf, len, result); // 转发DNS响应报文给用户端
             }
         } else // 直接转发DNS报文给远程DNS服务器
         {
@@ -115,6 +120,7 @@ void handle_dns_request(struct Trie *trie, struct Cache *cache, SOCKET sock, str
 
         removeExpiredEntries(cache); // 每次处理完一个DNS请求,删除过期的缓存记录
         releaseMsg(msg);             // 释放DNS报文
+        free(buf);
     }
 }
 
@@ -174,7 +180,7 @@ void send_dns_response(int sock, Dns_Msg *msg, unsigned char *buf, struct sockad
     // 考虑到int 和 unsigned short 的长度不同，会出现相关问题
     Dns_Msg *temp = bytestream_to_dnsmsg(bytestream, (&len));
     printf("The length of bytestream is %d\n", len);
-    int ret = sendto(sock, (const char *)bytestream, UDP_MAX, 0, (struct sockaddr *)&clientAddr, sizeof(clientAddr));
+    int ret = sendto(sock, (const char *)bytestream, len, 0, (struct sockaddr *)&clientAddr, sizeof(clientAddr));
     if (ret == SOCKET_ERROR)
         printf("send failed with error: %d\n", WSAGetLastError());
     else {
@@ -205,15 +211,19 @@ void forward_dns_request(int sock, unsigned char *buf, int len) {
 }
 
 // 转发DNS响应报文给用户端
-void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr, unsigned short id) {
+void forward_dns_response(int sock, unsigned char *buf, int len, struct sockaddr_in clientAddr) {
     int addrLen = sizeof(clientAddr);
 
     // 向用户端发送DNS响应报文
-    int ret = sendto(sock, (const char *)buf, UDP_MAX, 0, (struct sockaddr *)&clientAddr, addrLen);
+    int ret = sendto(sock, (const char *)buf, len, 0, (struct sockaddr *)&clientAddr, addrLen);
     if (ret == SOCKET_ERROR)
         printf("sendto failed with error: %d\n", WSAGetLastError());
     else {
         debug_mode == 1 ? bytestreamInfo(buf) : (void)0; // 打印bytestream信息
+        unsigned short offset;
+        Dns_Msg *msg = bytestream_to_dnsmsg(buf, &offset);
+        debug(msg);
+        releaseMsg(msg);
         puts("Forward DNS response to client successfully");
     }
 }
